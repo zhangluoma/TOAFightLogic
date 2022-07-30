@@ -965,8 +965,6 @@ function calculateEffectAttributes(arg1, arg2, arg3, arg4) {
     var enemyBaseAttributes = JSON.parse(JSON.stringify(arg3));
     var effectsOnEnemy = JSON.parse(JSON.stringify(arg4));
     var attribute = getEmptyAttribute();
-    console.log(effectsOnCharacter.effectMap);
-    console.log(effectsOnEnemy.effectMap);
     var effectiveEffect = Array(effectsOnCharacter.effectMap.length + effectsOnEnemy.effectMap.length);
     var stackNumber = Array(effectiveEffect.length).fill(0);
     var count = 0;
@@ -1045,7 +1043,6 @@ function calculateEffectAttributes(arg1, arg2, arg3, arg4) {
 }
 
 function checkModiferExtraKey(effect, key){
-    console.log(effect);
     for(var i = 0; i < effect.modifierEffect.extraKeys.length; i ++){
         if(effect.modifierEffect.extraKeys[i] == key){
             return i;
