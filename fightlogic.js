@@ -868,7 +868,7 @@ function MurmurHash3(string) {
 }
 
 function getRandomIntFromNumber(number){
-    return MurmurHash3(number)();
+    return MurmurHash3(number.toString())();
 }
 
 function getRandomSeededMinMax(min, max, seed){
