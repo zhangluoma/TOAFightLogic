@@ -1,4 +1,4 @@
-function findNextActionJS(gameStatus, playerAction, intervalIds) {
+/*function findNextActionJS(gameStatus, playerAction, intervalIds) {
     gameStatus = replaceStringWithInteger(gameStatus);
     playerAction = replaceStringWithInteger(playerAction);
     intervalIds = replaceStringWithInteger(intervalIds);
@@ -8,6 +8,28 @@ function findNextActionJS(gameStatus, playerAction, intervalIds) {
         findSpecialAbilityActionInternal(gameStatus, playerAction, intervalIds);
     } else if (playerAction > -1) {
         findPlayerActionInternal(gameStatus, playerAction, intervalIds);
+    }else{
+        findEnemyActionInternal(gameStatus, playerAction, intervalIds);
+    }
+    return replaceIntegerWithString(gameStatus);
+}*/
+
+function findNextActionJS(gameStatus, playerAction, intervalIds) {
+    gameStatus = replaceStringWithInteger(gameStatus);
+    playerAction = replaceStringWithInteger(playerAction);
+    intervalIds = replaceStringWithInteger(intervalIds);
+    if (gameStatus.nextTurnType == 0 || gameStatus.nextTurnType == 1) {
+        findStatusActionInternal(gameStatus, playerAction, intervalIds);
+    }else if(gameStatus.nextTurnType == 2){
+        if (playerAction >= 100){
+            findSpecialAbilityActionInternal(gameStatus, playerAction, intervalIds);
+        } else if (playerAction > -1) {
+            findPlayerActionInternal(gameStatus, playerAction, intervalIds);
+        }else if(playerAction == -1){
+            findSkipActionInternal(gameStatus, playerAction, intervalIds);
+        }else{
+            findDiscardActionInternal(gameStatus, playerAction, intervalIds);
+        }
     }else{
         findEnemyActionInternal(gameStatus, playerAction, intervalIds);
     }
@@ -90,6 +112,29 @@ function UpdateExtraForInitialStatus(gameStatus, intervalIds){
     return gameStatus;
 }
 
+function findDiscardActionInternal(gameStatus, playerAction, intervalIds){
+    var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
+    updateInnerState(innerState, gameStatus);
+    var toBurn = - playerAction - 2;
+    if(!AbilityOfClass(innerState.characterInfo.casterAbilityStatus.abilities[toBurn], 3)){
+        throw "the card connot be discarded";
+    }
+    innerState.deckInfo.playerCards = playCardWithAbilityIndex(toBurn, innerState.deckInfo.playerCards);
+    innerState.characterInfo.casterAttributes.action.actionPoint += 1;
+    gameStatus.nextAvailableAbilities = getAvailableAbilities(innerState.deckInfo.playerCards, innerState.characterInfo);
+    gameStatus.nextTurnType = 2;
+    updateGameStatusWithInput(gameStatus, innerState);
+
+    gameStatus.abilitySelection = playerAction;
+    gameStatus.validAction = true;
+    gameStatus.finished = innerState.characterInfo.casterAttributes.hp <= 0 || innerState.characterInfo.receiverAttributes.hp <= 0;
+    gameStatus.gauge = innerState.gauge;
+    gameStatus.characterInfo = innerState.characterInfo;
+    gameStatus.deckInfo = innerState.deckInfo;
+    gameStatus.nextSeed = getRandomIntFromNumber(gameStatus.nextSeed);
+    return gameStatus;
+}
+
 function findStatusActionInternal(gameStatus, playerAction, intervalIds) {
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     updateInnerState(innerState, gameStatus);
@@ -169,6 +214,16 @@ function applyEndTurnEffects(effects, ca, textInstanceGroup){
     }
 }
 
+function overrideCastInputWithInput(source, target) {
+    overrideDeckInfo(source.deckInfo, target.deckInfo);
+    overrideGauge(source.gauge, target.gauge);
+    source.reversed = target.reversed;
+    overrideCharacterInfo(source.characterInfo, target.characterInfo);
+    source.abilityIndex = target.abilityIndex;
+    //no need to override derived effects
+    source.seed = target.seed;
+}
+
 function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     updateInnerState(innerState, gameStatus);
@@ -182,7 +237,7 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
     
     if(toPickInHand != -1){
         var castInput = generateCastAbilityInput(innerState.deckInfo, innerState.gauge, true, innerState.reversedInfo, abilityToPick, gameStatus.derivedEffects, gameStatus.nextSeed);
-        overrideCastInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
+        overrideCastInputWithInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
         if(AbilityOfClass(innerState.reversedInfo.casterAbilityStatus.abilities[abilityToPick], 4)){
             innerState.deckInfo.enemyCards = playCardAndRemove(toPickInHand, innerState.deckInfo.enemyCards);
         }else{
@@ -215,6 +270,29 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
     gameStatus.nextSeed = getRandomIntFromNumber(gameStatus.nextSeed);
 }
 
+function findSkipActionInternal(gameStatus, playerAction, intervalIds){
+    var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
+    updateInnerState(innerState, gameStatus);
+        
+    var special5 = getCharacterSpecialAbilityById(innerState.characterInfo.casterSpecial, 5);
+    if(special5.id != 0 && innerState.characterInfo.casterEffects.specialCounter[2] == innerState.characterInfo.casterEffects.specialCounter[3]){
+        var applyInput = generateApplyEffectOnCharacterInput(innerState.characterInfo.casterAttributes, innerState.characterInfo.casterAttributes, innerState.characterInfo.casterEffects, innerState.characterInfo.casterEffects, special5.effect, gameStatus.derivedEffects, gameStatus.nextSeed, 1);
+        overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+    }
+    applyEndTurnEffects(innerState.characterInfo.casterEffects, innerState.characterInfo.casterAttributes);
+    prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects));
+    
+    gameStatus.abilitySelection = playerAction;
+    gameStatus.validAction = true;
+    gameStatus.finished = innerState.characterInfo.casterAttributes.hp <= 0 || innerState.characterInfo.receiverAttributes.hp <= 0;
+    gameStatus.gauge = innerState.gauge;
+    gameStatus.characterInfo = innerState.characterInfo;
+    gameStatus.deckInfo = innerState.deckInfo;
+    gameStatus.nextSeed = getRandomIntFromNumber(gameStatus.nextSeed);
+    //FightLogic.GameStatusV2 memory simulatedNextStart = PVELibrary2.beforeNewTurnStartExternal(gameStatus);
+    return gameStatus;
+}
+
 function findPlayerActionInternal(gameStatus, playerAction, intervalIds){
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     updateInnerState(innerState, gameStatus);
@@ -235,7 +313,7 @@ function findPlayerActionInternal(gameStatus, playerAction, intervalIds){
     }
     //players turn
     var castInput = generateCastAbilityInput(innerState.deckInfo, innerState.gauge, false, innerState.characterInfo, playerAction, gameStatus.derivedEffects, gameStatus.nextSeed);
-    overrideCastInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
+    overrideCastInputWithInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
     if(AbilityOfClass(innerState.characterInfo.casterAbilityStatus.abilities[playerAction], 4)){
         innerState.deckInfo.playerCards = playCardWithAbilityIndexAndRemove(playerAction, innerState.deckInfo.playerCards);
     }else{
@@ -302,21 +380,6 @@ function overrideGauge(source, target){
     source.enemyGauge = target.enemyGauge;
 }
 
-function overrideCastInput(source, target) {
-    overrideDeckInfo(source.deckInfo, target.deckInfo);
-    overrideGauge(source.gauge, target.gauge);
-    if(target.reversed){
-        source.characterInfo.casterAttributes = target.characterInfo.receiverAttributes;
-        source.characterInfo.receiverAttributes = target.characterInfo.casterAttributes;
-        source.characterInfo.casterEffects = target.characterInfo.receiverEffects;
-        source.characterInfo.receiverEffects = target.characterInfo.casterEffects;
-        source.characterInfo.casterAbilityStatus = target.characterInfo.receiverAbilityStatus;
-        source.characterInfo.receiverAbilityStatus = target.characterInfo.casterAbilityStatus;
-    }else{
-        overrideCharacterInfo(source.characterInfo, target.characterInfo);
-    }
-}
-
 function overrideCharacterInfo(source, target){
     overrideAttribute(source.casterBaseAttribute, target.casterBaseAttribute);
     overrideAttribute(source.receiverBaseAttribute, target.receiverBaseAttribute);
@@ -366,6 +429,7 @@ function castAbility(arg1, textInstanceGroup){
             overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.seed));
         }
         if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].enemyTarget){
+            console.log("apply effects on enemy");
             applyAbilityEffect(input.characterInfo.casterAttributes, input.characterInfo.receiverAttributes, input.characterInfo.casterEffects, input.characterInfo.receiverEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.derivedEffects, input.seed, 1, textInstanceGroup);
             overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.seed));
         }
@@ -468,7 +532,6 @@ function findSpecialAbilityActionInternal(gameStatus, playerAction, intervalIds)
 
     var specialIndex = findSpecialIndex(innerState.characterInfo.casterSpecial, playerAction, innerState.characterInfo.casterAttributes.action.actionPoint);
     applySpecialEffectV2(innerState.characterInfo.casterSpecial[specialIndex], innerState.characterInfo, gameStatus.derivedEffects, gameStatus.extra.thisTurnTextInstanceGroup);
-    //innerState.characterInfo.casterAttributes.action.actionPoint -= int64(int(innerState.characterInfo.casterSpecial[uint(specialIndex)].cost));
     gameStatus.nextAvailableAbilities = getAvailableAbilities(innerState.deckInfo.playerCards, innerState.characterInfo);
     gameStatus.nextTurnType = 2;
     updateGameStatusWithInput(gameStatus, innerState);
