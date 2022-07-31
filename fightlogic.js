@@ -230,11 +230,11 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
 
     //PVELibrary.refreshStatus(innerState.gauge, innerState.characterInfo);
     //enemy turn
+    
     var sRes = checkSkipped(innerState.reversedInfo.casterEffects) ? [-1, -1] : pickAbility(innerState.reversedInfo, innerState.deckInfo.enemyCards);
     var toPickInHand = sRes[0];
     var abilityToPick = sRes[1];
     //innerState = PVELibraryInnerLogic.ProcessInnerLogic(innerState, toPickInHand, abilityToPick, gameStatus.derivedEffects, gameStatus.nextSeed);
-    
     if(toPickInHand != -1){
         var castInput = generateCastAbilityInput(innerState.deckInfo, innerState.gauge, true, innerState.reversedInfo, abilityToPick, gameStatus.derivedEffects, gameStatus.nextSeed);
         overrideCastInputWithInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
