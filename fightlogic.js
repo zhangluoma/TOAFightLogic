@@ -18,6 +18,8 @@ function findNextActionJS(gameStatus, playerAction, intervalIds) {
     gameStatus = replaceStringWithInteger(gameStatus);
     playerAction = replaceStringWithInteger(playerAction);
     intervalIds = replaceStringWithInteger(intervalIds);
+    console.log("check the next action is " + playerAction);
+    console.log("gameStatus.nextTurnType " + gameStatus.nextTurnType);
     if (gameStatus.nextTurnType == 0 || gameStatus.nextTurnType == 1) {
         findStatusActionInternal(gameStatus, playerAction, intervalIds);
     }else if(gameStatus.nextTurnType == 2){
@@ -230,11 +232,11 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
 
     //PVELibrary.refreshStatus(innerState.gauge, innerState.characterInfo);
     //enemy turn
-    
     var sRes = checkSkipped(innerState.reversedInfo.casterEffects) ? [-1, -1] : pickAbility(innerState.reversedInfo, innerState.deckInfo.enemyCards);
     var toPickInHand = sRes[0];
     var abilityToPick = sRes[1];
     //innerState = PVELibraryInnerLogic.ProcessInnerLogic(innerState, toPickInHand, abilityToPick, gameStatus.derivedEffects, gameStatus.nextSeed);
+    
     if(toPickInHand != -1){
         var castInput = generateCastAbilityInput(innerState.deckInfo, innerState.gauge, true, innerState.reversedInfo, abilityToPick, gameStatus.derivedEffects, gameStatus.nextSeed);
         overrideCastInputWithInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
@@ -279,8 +281,8 @@ function findSkipActionInternal(gameStatus, playerAction, intervalIds){
         var applyInput = generateApplyEffectOnCharacterInput(innerState.characterInfo.casterAttributes, innerState.characterInfo.casterAttributes, innerState.characterInfo.casterEffects, innerState.characterInfo.casterEffects, special5.effect, gameStatus.derivedEffects, gameStatus.nextSeed, 1);
         overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
     }
-    applyEndTurnEffects(innerState.characterInfo.casterEffects, innerState.characterInfo.casterAttributes);
-    prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects));
+    applyEndTurnEffects(innerState.characterInfo.casterEffects, innerState.characterInfo.casterAttributes, gameStatus.extra.thisTurnTextInstanceGroup);
+    prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects), gameStatus.extra.nextTurnTextInstanceGroup);
     
     gameStatus.abilitySelection = playerAction;
     gameStatus.validAction = true;
@@ -429,7 +431,6 @@ function castAbility(arg1, textInstanceGroup){
             overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.seed));
         }
         if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].enemyTarget){
-            console.log("apply effects on enemy");
             applyAbilityEffect(input.characterInfo.casterAttributes, input.characterInfo.receiverAttributes, input.characterInfo.casterEffects, input.characterInfo.receiverEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.derivedEffects, input.seed, 1, textInstanceGroup);
             overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.seed));
         }
