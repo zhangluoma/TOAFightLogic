@@ -78,6 +78,18 @@ function isFloat(num) {
     return typeof num === "number" && !Number.isInteger(num);
 }
 
+function initStatusExtra(){
+    return {nextTurnTextInstanceGroup : [], thisTurnTextInstanceGroup : []};
+}
+
+function UpdateExtraForInitialStatus(gameStatus, intervalIds){
+    gameStatus = replaceStringWithInteger(gameStatus);
+    var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
+    gameStatus.extra = initStatusExtra();
+    prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects), gameStatus.extra.nextTurnTextInstanceGroup);
+    return gameStatus;
+}
+
 function findStatusActionInternal(gameStatus, playerAction, intervalIds) {
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     updateInnerState(innerState, gameStatus);
@@ -86,7 +98,7 @@ function findStatusActionInternal(gameStatus, playerAction, intervalIds) {
     gameStatus.abilitySelection = gameStatus.nextAbilitySelection;
     gameStatus.validAction = true;
     gameStatus.finished = innerState.characterInfo.casterAttributes.hp <= 0 || innerState.characterInfo.receiverAttributes.hp <= 0;
-    prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects));
+    prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects), gameStatus.extra.nextTurnTextInstanceGroup);
 
     gameStatus.gauge = innerState.gauge;
     gameStatus.characterInfo = innerState.characterInfo;
@@ -144,7 +156,7 @@ function playCardAndRemove(arg1, arg2) {
     return cards;
 }
 
-function applyEndTurnEffects(effects, ca){
+function applyEndTurnEffects(effects, ca, textInstanceGroup){
     var totalIronShield = 0;
     for(var i = 0; i < effects.valid.length; i ++){
         if(effects.valid[i]){
@@ -153,6 +165,7 @@ function applyEndTurnEffects(effects, ca){
     }
     if(totalIronShield != 0){
         ca.shield += totalIronShield;
+        textInstanceGroup.push(generateTextInstance(0, 0, totalIronShield, ca.isActive));
     }
 }
 
@@ -169,7 +182,7 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
     
     if(toPickInHand != -1){
         var castInput = generateCastAbilityInput(innerState.deckInfo, innerState.gauge, true, innerState.reversedInfo, abilityToPick, gameStatus.derivedEffects, gameStatus.nextSeed);
-        overrideCastInput(castInput, castAbility(castInput));
+        overrideCastInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
         if(AbilityOfClass(innerState.reversedInfo.casterAbilityStatus.abilities[abilityToPick], 4)){
             innerState.deckInfo.enemyCards = playCardAndRemove(toPickInHand, innerState.deckInfo.enemyCards);
         }else{
@@ -180,9 +193,9 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
         var special5 = getCharacterSpecialAbilityById(innerState.characterInfo.receiverSpecial, 5);
         if(special5.id != 0 && innerState.characterInfo.receiverEffects.specialCounter[2] == innerState.characterInfo.receiverEffects.specialCounter[3]){
             var applyInput = generateApplyEffectOnCharacterInput(innerState.characterInfo.receiverAttributes, innerState.characterInfo.receiverAttributes, innerState.characterInfo.receiverEffects, innerState.characterInfo.receiverEffects, special5.effect, gameStatus.derivedEffects, gameStatus.nextSeed, 1);
-            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, gameStatus.extra.thisTurnTextInstanceGroup));
         }
-        applyEndTurnEffects(innerState.characterInfo.receiverEffects, innerState.characterInfo.receiverAttributes);
+        applyEndTurnEffects(innerState.characterInfo.receiverEffects, innerState.characterInfo.receiverAttributes, gameStatus.extra.thisTurnTextInstanceGroup);
         //innerState = PVELibraryInnerLogic.runDiscardLogicForEenemy(innerState, gameStatus.derivedEffects, gameStatus.nextSeed);
     }
 
@@ -190,7 +203,7 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
         gameStatus.nextTurnType = 3;
         updateGameStatusWithInput(gameStatus, innerState);
     }else{
-        prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects));
+        prepareForNextGameStatus(generatePrepareForNextGameStatusInput(gameStatus, innerState.deckInfo, innerState.gauge, innerState.characterInfo, intervalIds, gameStatus.derivedEffects), gameStatus.extra.nextTurnTextInstanceGroup);
     }
     gameStatus.abilitySelection = abilityToPick;
     gameStatus.validAction = true;
@@ -222,7 +235,7 @@ function findPlayerActionInternal(gameStatus, playerAction, intervalIds){
     }
     //players turn
     var castInput = generateCastAbilityInput(innerState.deckInfo, innerState.gauge, false, innerState.characterInfo, playerAction, gameStatus.derivedEffects, gameStatus.nextSeed);
-    overrideCastInput(castInput, castAbility(castInput));
+    overrideCastInput(castInput, castAbility(castInput, gameStatus.extra.thisTurnTextInstanceGroup));
     if(AbilityOfClass(innerState.characterInfo.casterAbilityStatus.abilities[playerAction], 4)){
         innerState.deckInfo.playerCards = playCardWithAbilityIndexAndRemove(playerAction, innerState.deckInfo.playerCards);
     }else{
@@ -319,7 +332,11 @@ function overrideCharacterInfo(source, target){
     source.receiverSpecial = target.receiverSpecial;
 }
 
-function castAbility(arg1){
+function generateTextInstance(type, hpDelta, shieldDelta, onPlayer){
+    return {"iType" : type, "hpDelta" : hpDelta, "shieldDelta" : shieldDelta, "onPlayer" : onPlayer};
+}
+
+function castAbility(arg1, textInstanceGroup){
     var input = JSON.parse(JSON.stringify(arg1));
     syncGaugeWithGauge(input.characterInfo, input.reversed, input.gauge);
     var ab = input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex];
@@ -342,24 +359,24 @@ function castAbility(arg1){
     }else{
         input.characterInfo.casterAttributes.action.actionPoint -= input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].actionPoint;
     }
-    //for(int i = 0 ; i < executionTime; i ++){
-    if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfTarget){
-        applyAbilityEffect(input.characterInfo.casterAttributes, input.characterInfo.casterAttributes, input.characterInfo.casterEffects, input.characterInfo.casterEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.derivedEffects, input.seed, executionTime);
-        triggerBonusCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.abilityIndex, input.characterInfo);
-        overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.seed));
-    }
-    if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].enemyTarget){
-        applyAbilityEffect(input.characterInfo.casterAttributes, input.characterInfo.receiverAttributes, input.characterInfo.casterEffects, input.characterInfo.receiverEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.derivedEffects, input.seed, executionTime);
-        overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.seed));
-    }
-    var special = getCharacterSpecialAbilityById(input.characterInfo.casterSpecial, 1);
-    if(special.id != 0 && input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].actionPoint == special.attributes[1]){
-        input.characterInfo.casterAttributes.action.actionPoint += special.attributes[2];
-        if(input.characterInfo.casterAttributes.action.actionPoint > input.characterInfo.casterAttributes.action.actionPointMax){
-            input.characterInfo.casterAttributes.action.actionPoint = input.characterInfo.casterAttributes.action.actionPointMax;
+    for(var i = 0 ; i < executionTime; i ++){
+        if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfTarget){
+            applyAbilityEffect(input.characterInfo.casterAttributes, input.characterInfo.casterAttributes, input.characterInfo.casterEffects, input.characterInfo.casterEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.derivedEffects, input.seed, 1, textInstanceGroup);
+            triggerBonusCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.abilityIndex, input.characterInfo);
+            overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.seed));
+        }
+        if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].enemyTarget){
+            applyAbilityEffect(input.characterInfo.casterAttributes, input.characterInfo.receiverAttributes, input.characterInfo.casterEffects, input.characterInfo.receiverEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.derivedEffects, input.seed, 1, textInstanceGroup);
+            overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.seed));
+        }
+        var special = getCharacterSpecialAbilityById(input.characterInfo.casterSpecial, 1);
+        if(special.id != 0 && input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].actionPoint == special.attributes[1]){
+            input.characterInfo.casterAttributes.action.actionPoint += special.attributes[2];
+            if(input.characterInfo.casterAttributes.action.actionPoint > input.characterInfo.casterAttributes.action.actionPointMax){
+                input.characterInfo.casterAttributes.action.actionPoint = input.characterInfo.casterAttributes.action.actionPointMax;
+            }
         }
     }
-    //}
     syncGaugeWithCharacterInfo(input.characterInfo, input.reversed, input.gauge);
     refreshStatus(input.gauge, input.characterInfo);
     return input;
@@ -433,14 +450,14 @@ function triggerBonusCardAbility(deckInfo, reversed, effects, abilityIndex, char
     }
 }
 
-function applyAbilityEffect(caster, receiver, effectOnCaster, effectOnReceiver, abilityEffects, derivedEffects, seed, executionTime) {
+function applyAbilityEffect(caster, receiver, effectOnCaster, effectOnReceiver, abilityEffects, derivedEffects, seed, executionTime, textInstanceGroup) {
     for(var i = 0; i < abilityEffects.length; i ++){
         if(abilityEffects[i].targetSelf){
             var applyInput = generateApplyEffectOnCharacterInput(caster, receiver, effectOnCaster, effectOnReceiver, abilityEffects[i], derivedEffects, seed, executionTime);
-            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, textInstanceGroup));
         }else{
             var applyInput = generateApplyEffectOnCharacterInput(caster, caster, effectOnCaster, effectOnReceiver, abilityEffects[i], derivedEffects, seed, executionTime);
-            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, textInstanceGroup));
         }
     }
 }
@@ -450,7 +467,7 @@ function findSpecialAbilityActionInternal(gameStatus, playerAction, intervalIds)
     updateInnerState(innerState, gameStatus);
 
     var specialIndex = findSpecialIndex(innerState.characterInfo.casterSpecial, playerAction, innerState.characterInfo.casterAttributes.action.actionPoint);
-    applySpecialEffectV2(innerState.characterInfo.casterSpecial[specialIndex], innerState.characterInfo, gameStatus.derivedEffects);
+    applySpecialEffectV2(innerState.characterInfo.casterSpecial[specialIndex], innerState.characterInfo, gameStatus.derivedEffects, gameStatus.extra.thisTurnTextInstanceGroup);
     //innerState.characterInfo.casterAttributes.action.actionPoint -= int64(int(innerState.characterInfo.casterSpecial[uint(specialIndex)].cost));
     gameStatus.nextAvailableAbilities = getAvailableAbilities(innerState.deckInfo.playerCards, innerState.characterInfo);
     gameStatus.nextTurnType = 2;
@@ -477,12 +494,12 @@ function updateGameStatusWithInput(gameStatus, innerState) {
     gameStatus.deckInfoNextStart = innerState.deckInfo;
 }
 
-function applySpecialEffectV2(special, characterInfo, derivedEffects) {
+function applySpecialEffectV2(special, characterInfo, derivedEffects, textInstanceGroup) {
     if(special.id != 0){
         var specialOnTarget = special.onTarget;
         runConditionRelated(generateTriggerCondition(special.triggerType, special.triggerAttr, special.triggerOperator, special.triggerVal), characterInfo);
         var applyInput = generateApplyEffectOnCharacterInput(characterInfo.casterAttributes, specialOnTarget ? characterInfo.receiverAttributes : characterInfo.casterAttributes, characterInfo.casterEffects, specialOnTarget ? characterInfo.receiverEffects : characterInfo.casterEffects, special.effect, derivedEffects, 0, 1);
-        overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+        overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, textInstanceGroup));
     }
 }
 
@@ -817,6 +834,12 @@ function updateInnerState(innerState, gameStatus){
     gameStatus.nextAvailableAbilities = [];
     innerState.deckInfo = gameStatus.deckInfoNextStart;
     innerState.gauge = gameStatus.nextActionGauge;
+    if(gameStatus.extra != undefined){
+        gameStatus.extra.thisTurnTextInstanceGroup = gameStatus.extra.nextTurnTextInstanceGroup;
+        gameStatus.extra.nextTurnTextInstanceGroup = [];
+    }else{
+        gameStatus.extra = initStatusExtra();
+    }
     overrideAttribute(gameStatus.characterInfo.casterAttributes, gameStatus.casterAttributeNextStart);
     overrideAttribute(gameStatus.characterInfo.receiverAttributes, gameStatus.receiverAttributeNextStart);
     overrideEffectsOnCharacter(gameStatus.characterInfo.casterEffects, gameStatus.casterEffectsNextStart);
@@ -826,8 +849,8 @@ function updateInnerState(innerState, gameStatus){
     refreshStatus(innerState.gauge, innerState.characterInfo);
 }
 
-function prepareForNextGameStatus(input) {
-    output = findNextActionPointAndRemoveExpiredEffect(generateFindNextActionPointAndRemoveExpiredEffectInput(input.gauge, input.characterInfo, input.deckInfo, input.gameStatus.nextAvailableAbilities, input.derivedEffects, getRandomIntFromNumber(input.gameStatus.nextSeed)), input.intervalIds);
+function prepareForNextGameStatus(input, textInstanceGroup) {
+    output = findNextActionPointAndRemoveExpiredEffect(generateFindNextActionPointAndRemoveExpiredEffectInput(input.gauge, input.characterInfo, input.deckInfo, input.gameStatus.nextAvailableAbilities, input.derivedEffects, getRandomIntFromNumber(input.gameStatus.nextSeed)), input.intervalIds, textInstanceGroup);
     updateNextTurnGameStatus(input.gameStatus, input.deckInfo, output.actionTarget, output.characterInfo, output.gauge);
     input.gameStatus.casterEffectsNextStart = output.characterInfo.casterEffects;
     input.gameStatus.receiverEffectsNextStart = output.characterInfo.receiverEffects;
@@ -1122,9 +1145,9 @@ function syncGaugeWithCharacterInfo(cinfo, reversed, gauge) {
     }
 }
 
-function findNextActionPointAndRemoveExpiredEffect(input, intervalIds){
+function findNextActionPointAndRemoveExpiredEffect(input, intervalIds, textInstanceGroup){
     var output = {};
-    output.actionTarget = findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds);
+    output.actionTarget = findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, textInstanceGroup);
     output.gauge = input.gauge;
     output.characterInfo = input.characterInfo;
     output.nextAvailables = input.nextAvailables;
@@ -1141,12 +1164,12 @@ function overrideApplyEffect(input, output) {
     input.seed = output.seed;
 }
 
-function resolveSpecialAbility3(characterInfo, derivedEffects, seed){
+function resolveSpecialAbility3(characterInfo, derivedEffects, seed, textInstanceGroup){
     var casterSpecial3 = getCharacterSpecialAbilityById(characterInfo.casterSpecial, 3);
     if(casterSpecial3.id != 0){
         if(characterInfo.casterAttributes.shield == 0){
             var applyInput = generateApplyEffectOnCharacterInput(characterInfo.casterAttributes, characterInfo.casterAttributes, characterInfo.casterEffects, characterInfo.casterEffects, casterSpecial3.effect, derivedEffects, seed, 1);
-            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+            overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, textInstanceGroup));
         }else{
             removeEffectOnCharacter(characterInfo.casterEffects, casterSpecial3.effect);
         }
@@ -1162,10 +1185,10 @@ function getExtraKeyForModifierEffect(effect, key){
     return -1;
 }
 
-function applyEffectOnCharacter(arg1){
+function applyEffectOnCharacter(arg1, textInstanceGroup){
     var input = JSON.parse(JSON.stringify(arg1));
     if(input.effect.duration == 0){
-        var output = applyInstantEffectOnCharacter(input.caster, input.receiver, generateInstantEffectInput(input.effectOnCaster, input.effectOnReceiver, input.effect, 1, input.seed, false, input.executionTime));
+        var output = applyInstantEffectOnCharacter(input.caster, input.receiver, generateInstantEffectInput(input.effectOnCaster, input.effectOnReceiver, input.effect, 1, input.seed, false, input.executionTime), textInstanceGroup);
         overrideAttribute(input.caster, output.caster);
         overrideAttribute(input.receiver, output.receiver);
         overrideEffectsOnCharacter(input.effectOnCaster, output.effectOnCaster);
@@ -1224,22 +1247,24 @@ function applyEffectOnCharacter(arg1){
     return generateApplyEffectOnCharacterOutput(input.caster, input.receiver, input.effectOnCaster, input.effectOnReceiver, input.effect, input.seed);
 }
 
-function applyDamage(realDamage, caster, receiver, effectOnCaster, effectOnReceiver){
+function applyDamage(realDamage, caster, receiver, effectOnCaster, effectOnReceiver, damageType, subGroup){
     var damageAfterShield = realDamage;
     if(receiver.shield >= realDamage){
         receiver.shield -= realDamage;
         damageAfterShield = 0;
+        subGroup.push(generateTextInstance(damageType, 0, realDamage, receiver.isActive));
     }else{
         damageAfterShield -= receiver.shield;
         receiver.shield = 0;
+        subGroup.push(generateTextInstance(damageType, -damageAfterShield, -receiver.shield, receiver.isActive));
     }
     if(damageAfterShield > 0){
-        resolveReflection(caster, receiver, effectOnReceiver);
+        resolveReflection(caster, receiver, effectOnReceiver, subGroup);
     }
     receiver.hp -= damageAfterShield;
     if(damageAfterShield > 0){
         updateSoulVal(damageAfterShield, caster, effectOnCaster);
-        resolveLifesteal(damageAfterShield, caster, effectOnCaster);
+        resolveLifesteal(damageAfterShield, caster, effectOnCaster, subGroup);
     }
     if(receiver.hp < 0){
         receiver.hp = 0;
@@ -1285,25 +1310,32 @@ function updateSoulVal(damage, caster, effectOnCaster) {
     }
 }
 
-function resolveLifesteal(damage, caster, effectOnCaster){
+function resolveLifesteal(damage, caster, effectOnCaster, textInstanceSubGroup){
     for(var i = 0; i < effectOnCaster.valid.length; i ++){
         if(effectOnCaster.valid[i] && effectOnCaster.effectMap[i].specialEffect.valid){
             var lifestealAmount = damage * effectOnCaster.effectMap[i].specialEffect.lifesteal * (effectOnCaster.extraStack[i] + 1) / 10000;
             if(damage > 0 && lifestealAmount == 0){
                 lifestealAmount = 1;
             }
+            var preHP = caster.hp;
             caster.hp += lifestealAmount;
             if(caster.hp > caster.maxHP){
                 caster.hp = caster.maxHP;
+            }
+            if(caster.hp > preHP){
+                textInstanceSubGroup.push(generateTextInstance(-1, caster.hp - preHP, 0, caster.isActive));
             }
         }
     }
 }
 
-function resolveReflection(caster, receiver, effectOnReceiver){
+function resolveReflection(caster, receiver, effectOnReceiver, textInstanceSubGroup){
     for(var i = 0; i < effectOnReceiver.valid.length; i ++){
         if(effectOnReceiver.valid[i] && effectOnReceiver.effectMap[i].specialEffect.valid){
             var reflectionDamage = effectOnReceiver.effectMap[i].specialEffect.reflection * (effectOnReceiver.extraStack[i] + 1);
+            if(reflectionDamage > 0){
+                textInstanceSubGroup.push(generateTextInstance(effectOnReceiver.effectMap[i].specialEffect.rType, -reflectionDamage, 0, caster.isActive));
+            }
             if(caster.hp > reflectionDamage){
                 caster.hp -= reflectionDamage;
             }else{
@@ -1313,24 +1345,23 @@ function resolveReflection(caster, receiver, effectOnReceiver){
     }
 }
 
-function applyInstantEffectOnCharacter(arg1, arg2, arg3){
+function applyInstantEffectOnCharacter(arg1, arg2, arg3, textInstanceGroup){
     var caster = JSON.parse(JSON.stringify(arg1));
     var receiver = JSON.parse(JSON.stringify(arg2));
     var input = JSON.parse(JSON.stringify(arg3));
     var ti = 0;
     if(shouldBeExcuted(caster, receiver, input.effect.instantEffect)){
         var totalExecutionTime = input.executionTime * input.effect.instantEffect.instances;
-        //for(int i = 0; i < input.effect.instantEffect.instances; i ++){
+        var subGroup = [];
+        for(var i = 0; i < totalExecutionTime; i ++){
             if(input.effect.instantEffect.shieldDelta != 0 || input.effect.instantEffect.damage != 0 || input.effect.instantEffect.hpRatioDelta!= 0 || input.effect.instantEffect.hpDelta!= 0 || input.effect.instantEffect.baseDamageRatio != 0 || input.effect.instantEffect.actionDelta != 0 || input.effect.instantEffect.progressDelta != 0){
                 if(!input.effectOnReceiver.effectCatalogs.damageImmume && (input.effect.instantEffect.damage != 0 || input.effect.instantEffect.baseDamageRatio != 0)){
                     //apply damage
                     var realDamage = calculateEffectDamage(caster, receiver, input.effectOnReceiver, input.effect, input.ignoreCasterAttributes) * input.stack;
-                    for(var i = 0; i < totalExecutionTime; i ++){
-                        applyDamage(realDamage, caster, receiver, input.effectOnCaster, input.effectOnReceiver);
-                    }
+                    applyDamage(realDamage, caster, receiver, input.effectOnCaster, input.effectOnReceiver, input.effect.instantEffect.damageType, subGroup);
                 }
                 if(input.effect.instantEffect.progressDelta * input.stack != 0){
-                    receiver.action.gaugeVal -= (input.effect.instantEffect.progressDelta * input.stack * totalExecutionTime);
+                    receiver.action.gaugeVal -= (input.effect.instantEffect.progressDelta * input.stack);
                     if(receiver.action.gaugeVal > 9999999){
                         receiver.action.gaugeVal = 9999999;
                     }else if(receiver.action.gaugeVal < 0){
@@ -1338,21 +1369,26 @@ function applyInstantEffectOnCharacter(arg1, arg2, arg3){
                     }
                 }
                 if(input.effect.instantEffect.actionDelta != 0){
-                    receiver.action.actionPoint += (input.effect.instantEffect.actionDelta * input.stack * totalExecutionTime);
+                    receiver.action.actionPoint += (input.effect.instantEffect.actionDelta * input.stack);
                     if(receiver.action.actionPoint < 0){
                         receiver.action.actionPoint = 0;
                     }
                 }
                 //apply shield
                 if(input.effect.instantEffect.shieldDelta != 0){
-                    receiver.shield += (input.effect.instantEffect.shieldDelta * input.stack * totalExecutionTime);
+                    var originalShield = receiver.shield;
+                    receiver.shield += (input.effect.instantEffect.shieldDelta * input.stack);
                     if(receiver.shield < 0){
                         receiver.shield = 0;
                     }
+                    if(receiver.shield != originalShield){
+                        subGroup.push(generateTextInstance(0, 0, receiver.shield - originalShield, receiver.isActive));
+                    }
                 }
                 //apply hp change
+                var originalHP = receiver.hp;
                 if(input.effect.instantEffect.hpDelta != 0){
-                    receiver.hp += (input.effect.instantEffect.hpDelta * input.stack * totalExecutionTime);
+                    receiver.hp += (input.effect.instantEffect.hpDelta * input.stack);
                 }
                 if(receiver.hp < 0){
                     receiver.hp = 0;
@@ -1360,30 +1396,31 @@ function applyInstantEffectOnCharacter(arg1, arg2, arg3){
                     receiver.hp = receiver.maxHP;
                 }
                 if(input.effect.instantEffect.hpRatioDelta != 0){
-                    for(var i = 0; i < totalExecutionTime; i ++){
-                        receiver.hp += (input.effect.instantEffect.hpRatioDelta * (receiver.maxHP - receiver.hp) / 10000);
-                    }
+                    receiver.hp += (input.effect.instantEffect.hpRatioDelta * (receiver.maxHP - receiver.hp) / 10000);
                 }
                 if(receiver.hp < 0){
                     receiver.hp = 0;
                 }else if(receiver.hp > receiver.maxHP){
                     receiver.hp = receiver.maxHP;
                 }
+                if(receiver.hp != originalHP){
+                    subGroup.push(generateTextInstance(-1, receiver.hp - originalHP, 0, receiver.isActive));
+                }
             }
             if(input.effect.instantEffect.special){
-                input.effectOnReceiver.specialCounter[input.effect.instantEffect.specialIndex] += (input.effect.instantEffect.specialDelta * input.stack * totalExecutionTime);
+                input.effectOnReceiver.specialCounter[input.effect.instantEffect.specialIndex] += (input.effect.instantEffect.specialDelta * input.stack);
                 if(input.effectOnReceiver.specialCounter[input.effect.instantEffect.specialIndex] < 0){
                     input.effectOnReceiver.specialCounter[input.effect.instantEffect.specialIndex] = 0;
                 }
             }
             if(input.effect.instantEffect.dispellCount != 0){
-                for(var j = 0; j < input.effect.instantEffect.dispellCount * input.stack * totalExecutionTime; j ++){
+                for(var j = 0; j < input.effect.instantEffect.dispellCount * input.stack; j ++){
                     dispellOne(caster, receiver, input.effectOnReceiver);
                 }
             }
             ti = checkExtraKey(input.effect, 1);
             if(ti != -1){
-                receiver.action.actionPoint += (input.effect.instantEffect.extraVals[ti] * totalExecutionTime);
+                receiver.action.actionPoint += (input.effect.instantEffect.extraVals[ti]);
                 if(receiver.action.actionPoint < 0){
                     receiver.action.actionPoint = 0;
                 }
@@ -1392,7 +1429,7 @@ function applyInstantEffectOnCharacter(arg1, arg2, arg3){
             if(ti != -1){
                 input.effectOnReceiver.specialCounter[3] = getRandomSeededMinMax(1, 6, input.seed + 1521);
             }
-        //}
+        }
         if(input.effect.effectCatalogId == 8){
             ti = (input.effectOnCaster.specialCounter[3] - 4);
             if(ti < 0){
@@ -1400,9 +1437,12 @@ function applyInstantEffectOnCharacter(arg1, arg2, arg3){
             }
             ti += 1;
             for(var i = 0; i <  ti; i ++){
-                applyDamage(calculatePhysicalDamage(2, 0, caster, receiver, input.ignoreCasterAttributes) * input.stack, caster, receiver, input.effectOnCaster, input.effectOnReceiver);
+                applyDamage(calculatePhysicalDamage(2, 0, caster, receiver, input.ignoreCasterAttributes) * input.stack, caster, receiver, input.effectOnCaster, input.effectOnReceiver, 0, textInstanceGroup);
             }
             input.effectOnCaster.specialCounter[3] = 100;
+        }
+        if(subGroup.length > 0){
+            textInstanceGroup.push(subGroup);
         }
     }
     return generateApplyInstantEffectOutput(caster, receiver, input.effectOnCaster, input.effectOnReceiver);
@@ -1556,21 +1596,22 @@ function getEmptyEffect(){
     return generateEffect(0, 0, generateModiferEffect(0,0,0,0,0,0,0,0,0,0,0, [], []), generateInstantEffect(0,0,0,0,0,0,0,0,0, false, 0, 0, 0, [], [], []), generateEnchancedEffect(0,0,0), generateGainCardEffect(false, 0, 0, 0, 0), generateSpecialEffect(false, 0, 0, 0), 0, 0, true, 0, 0, 0, true);
 }
 
-function executeInstantEffect(input) {
+/*TODO*/
+function executeInstantEffect(input, textInstanceGroup) {
     var effect = input.ownerEffect.effectMap[input.index];
     var target = effect.targetSelf ? input.ownerAttributes : input.otherSideAttribute;
     var effectArray = Array(2);
     effectArray[0] = effect.targetSelf ? input.ownerEffect : input.otherEffects;
     effectArray[1] = isOfSameReference(input.ownerEffect.ownerId[input.index], input.ownerAttributes) ? input.ownerEffect : input.otherEffects;
-    var output = applyInstantEffectOnCharacter(input.ownerEffect.characterAttributes[input.ownerEffect.ownerId[input.index]], target, generateInstantEffectInput(effectArray[1], effectArray[0], effect, input.ownerEffect.extraStack[input.index] + 1, input.seed, input.ignoreCaster, 1));
+    var output = applyInstantEffectOnCharacter(input.ownerEffect.characterAttributes[input.ownerEffect.ownerId[input.index]], target, generateInstantEffectInput(effectArray[1], effectArray[0], effect, input.ownerEffect.extraStack[input.index] + 1, input.seed, input.ignoreCaster, 1), textInstanceGroup);
     overrideAttribute(input.ownerEffect.characterAttributes[input.ownerEffect.ownerId[input.index]], output.caster);
     overrideAttribute(target, output.receiver);
     overrideEffectsOnCharacter(effectArray[1], output.effectOnCaster);
     overrideEffectsOnCharacter(effectArray[0], output.effectOnReceiver);
 }
 
-function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds){
-    resolveSpecialAbility3(input.characterInfo, input.derivedEffects, input.seed);
+function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, textInstanceGroup){
+    resolveSpecialAbility3(input.characterInfo, input.derivedEffects, input.seed, textInstanceGroup);
     //FightLogicBasic.resolveSpecialEffectsForHPBased(input.characterInfo.casterSpecial, input.characterInfo, false, input.derivedEffects);
     //FightLogicBasic.resolveSpecialEffectsForHPBased(input.characterInfo.receiverSpecial, input.characterInfo, true, input.derivedEffects);
     var mainSpeed = input.characterInfo.casterAttributes.speed;
@@ -1604,9 +1645,9 @@ function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds){
         //excuteEffect;
         syncGaugeWithGauge(input.characterInfo, false, input.gauge);
         if(actionTarget.player){
-            executeInstantEffect(generateExecuteInstantEffectInput(input.characterInfo.casterEffects, input.characterInfo.receiverEffects, input.characterInfo.casterAttributes, input.characterInfo.receiverAttributes, actionTarget.index, input.seed, true));
+            executeInstantEffect(generateExecuteInstantEffectInput(input.characterInfo.casterEffects, input.characterInfo.receiverEffects, input.characterInfo.casterAttributes, input.characterInfo.receiverAttributes, actionTarget.index, input.seed, true), textInstanceGroup);
         }else{
-            executeInstantEffect(generateExecuteInstantEffectInput(input.characterInfo.receiverEffects, input.characterInfo.casterEffects, input.characterInfo.receiverAttributes, input.characterInfo.casterAttributes, actionTarget.index, input.seed, true));
+            executeInstantEffect(generateExecuteInstantEffectInput(input.characterInfo.receiverEffects, input.characterInfo.casterEffects, input.characterInfo.receiverAttributes, input.characterInfo.casterAttributes, actionTarget.index, input.seed, true), textInstanceGroup);
         }
         syncGaugeWithCharacterInfo(input.characterInfo, false, input.gauge);
     }
@@ -1657,7 +1698,7 @@ function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds){
         input.gauge.enemyGauge += 10000000;
     }
     //you cant make any attribute change in this method!
-    currOut = updateEffectsAtStartOfTurn(actionTarget.index, actionTarget.player, input.characterInfo, intervalIds, input.deckInfo, input.derivedEffects, input.seed);
+    currOut = updateEffectsAtStartOfTurn(actionTarget.index, actionTarget.player, input.characterInfo, intervalIds, input.deckInfo, input.derivedEffects, input.seed, textInstanceGroup);
     overrideEffectsOnCharacter(input.characterInfo.casterEffects, currOut.characterInfo.casterEffects);
     overrideEffectsOnCharacter(input.characterInfo.receiverEffects, currOut.characterInfo.receiverEffects);
     overrideAttribute(input.characterInfo.casterAttributes, currOut.characterInfo.casterAttributes);
@@ -1894,7 +1935,7 @@ function updateDeck(card, index, val) {
     card.deck[index] = val;
 }
 
-function updateEffectsAtStartOfTurn(arg1, arg2, arg3, arg4, arg5, arg6, seed){
+function updateEffectsAtStartOfTurn(arg1, arg2, arg3, arg4, arg5, arg6, seed, textInstanceGroup){
     var targetIndex = JSON.parse(JSON.stringify(arg1));
     var player = JSON.parse(JSON.stringify(arg2));
     var characterInfo = JSON.parse(JSON.stringify(arg3));
@@ -1909,7 +1950,7 @@ function updateEffectsAtStartOfTurn(arg1, arg2, arg3, arg4, arg5, arg6, seed){
         innerState.reversed = true;
     }
     if(innerState.executeUpdate){
-        var o = resolveStartTurnEffects(characterInfo, derivedEffects, intervalId, seed, innerState.reversed);
+        var o = resolveStartTurnEffects(characterInfo, derivedEffects, intervalId, seed, innerState.reversed, textInstanceGroup);
         characterInfo.casterAttributes = o.casterAttributes;
         characterInfo.receiverAttributes = o.receiverAttributes;
         characterInfo.casterEffects = o.casterEffects;
@@ -2121,11 +2162,11 @@ function discardHandsExceptFor(arg1, arg2){
     return card;
 }
 
-function resolveStartTurnEffects(arg1, arg2, arg3, seed, reversed){
+function resolveStartTurnEffects(arg1, arg2, arg3, seed, reversed, textInstanceGroup){
     var characterInfo = JSON.parse(JSON.stringify(arg1));
     var derivedEffects = JSON.parse(JSON.stringify(arg2));
     var intervalId = JSON.parse(JSON.stringify(arg3));
-    var r = resolveSpecialEffects(generateEffectResolutionInput(characterInfo.casterSpecial, characterInfo.receiverSpecial, characterInfo.casterAttributes, characterInfo.receiverAttributes, characterInfo.casterEffects, characterInfo.receiverEffects, derivedEffects, intervalId), reversed, seed);
+    var r = resolveSpecialEffects(generateEffectResolutionInput(characterInfo.casterSpecial, characterInfo.receiverSpecial, characterInfo.casterAttributes, characterInfo.receiverAttributes, characterInfo.casterEffects, characterInfo.receiverEffects, derivedEffects, intervalId), reversed, seed, textInstanceGroup);
     characterInfo.casterAttributes = r.casterAttributes;
     characterInfo.receiverAttributes = r.receiverAttributes;
     characterInfo.casterEffects = r.casterEffects;
@@ -2179,7 +2220,7 @@ function resolveSpecial2(input, reversed){
 }
 
 
-function resolveSpecialEffects(arg1, reversed, seed){
+function resolveSpecialEffects(arg1, reversed, seed, textInstanceGroup){
     var input = JSON.parse(JSON.stringify(arg1));
     resolveSpecial2(input, reversed);
     //resolve hp based
@@ -2200,17 +2241,17 @@ function resolveSpecialEffects(arg1, reversed, seed){
             for(var i = 0; i < stackNumber; i ++){
                 if(special.id != 0){
                     var applyInput = generateApplyEffectOnCharacterInput(reversed ? input.receiverAttributes : input.casterAttributes, reversed ? (special.onTarget ? input.casterAttributes : input.receiverAttributes): (special.onTarget ? input.receiverAttributes : input.casterAttributes), reversed ? input.receiverEffects : input.casterEffects, reversed ? (special.onTarget ? input.casterEffects : input.receiverEffects) : (special.onTarget ? input.receiverEffects : input.casterEffects), special.effect, input.derivedEffects, 0, 1);
-                    overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+                    overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, textInstanceGroup));
                 }
             }
         }else{
             continue;
         }
     }
-    return updateIntervalEffectCounterAndApplyIfZero(reversed ? input.receiverSpecial : input.casterSpecial, input, reversed, input.derivedEffects, input.intervalId, seed);
+    return updateIntervalEffectCounterAndApplyIfZero(reversed ? input.receiverSpecial : input.casterSpecial, input, reversed, input.derivedEffects, input.intervalId, seed, textInstanceGroup);
 }
 
-function updateIntervalEffectCounterAndApplyIfZero(arg1, arg2, arg3, arg4, arg5, arg6){
+function updateIntervalEffectCounterAndApplyIfZero(arg1, arg2, arg3, arg4, arg5, arg6, textInstanceGroup){
     var abilityEntries = JSON.parse(JSON.stringify(arg1));
     var input = JSON.parse(JSON.stringify(arg2));
     var reversed = JSON.parse(JSON.stringify(arg3));
@@ -2220,9 +2261,9 @@ function updateIntervalEffectCounterAndApplyIfZero(arg1, arg2, arg3, arg4, arg5,
     //reset counter for special 5(dice)
     resetCounterForSpecial5(input, reversed, seed);
     if(!reversed){
-        applySpecialEffectWithId(input.receiverSpecial, input.receiverEffects, input.receiverEffects, input.receiverAttributes, input.receiverAttributes, input.derivedEffects, 6);
+        applySpecialEffectWithId(input.receiverSpecial, input.receiverEffects, input.receiverEffects, input.receiverAttributes, input.receiverAttributes, input.derivedEffects, 6, textInstanceGroup);
     }else{
-        applySpecialEffectWithId(input.casterSpecial, input.casterEffects, input.casterEffects, input.casterAttributes, input.casterAttributes, input.derivedEffects, 6);
+        applySpecialEffectWithId(input.casterSpecial, input.casterEffects, input.casterEffects, input.casterAttributes, input.casterAttributes, input.derivedEffects, 6, textInstanceGroup);
     }
 
     for(var i =0 ; i < intervalId.length; i ++){
@@ -2231,17 +2272,17 @@ function updateIntervalEffectCounterAndApplyIfZero(arg1, arg2, arg3, arg4, arg5,
             var specialKey = special.attributes[3];
             var resetVal = special.attributes[4];
             if(increaseValForKeyInEffects(reversed ? input.receiverEffects : input.casterEffects, specialKey, resetVal)){
-                applySpecialEffect(special, reversed ? input.receiverEffects : input.casterEffects, reversed ? (special.onTarget ? input.casterEffects : input.receiverEffects) : (special.onTarget ? input.receiverEffects : input.casterEffects), reversed ? input.receiverAttributes : input.casterAttributes, reversed ? (special.onTarget ? input.casterAttributes : input.receiverAttributes): (special.onTarget ? input.receiverAttributes : input.casterAttributes), derivedEffects);
+                applySpecialEffect(special, reversed ? input.receiverEffects : input.casterEffects, reversed ? (special.onTarget ? input.casterEffects : input.receiverEffects) : (special.onTarget ? input.receiverEffects : input.casterEffects), reversed ? input.receiverAttributes : input.casterAttributes, reversed ? (special.onTarget ? input.casterAttributes : input.receiverAttributes): (special.onTarget ? input.receiverAttributes : input.casterAttributes), derivedEffects, textInstanceGroup);
             }
         }
     }
     return generateEffectResolveOutput(input.casterAttributes, input.receiverAttributes, input.casterEffects, input.receiverEffects);
 }
 
-function applySpecialEffect(special, casterEffects, receiverEffects, casterAttributes, receiverAttributes, derivedEffects) {
+function applySpecialEffect(special, casterEffects, receiverEffects, casterAttributes, receiverAttributes, derivedEffects, textInstanceGroup) {
     if(special.id != 0){
         var applyInput = generateApplyEffectOnCharacterInput(casterAttributes, receiverAttributes, casterEffects, receiverEffects, special.effect, derivedEffects, 0, 1);
-        overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+        overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, textInstanceGroup));
     }
 }
 
@@ -2288,11 +2329,11 @@ function getIndexForKeyInEffects(effects, key) {
     }
 }
 
-function applySpecialEffectWithId(abilityEntries, casterEffects, receiverEffects,  casterAttributes,  receiverAttributes,  derivedEffects, id) {
+function applySpecialEffectWithId(abilityEntries, casterEffects, receiverEffects,  casterAttributes,  receiverAttributes,  derivedEffects, id, textInstanceGroup) {
     var special = getCharacterSpecialAbilityById(abilityEntries, id);
     if(special.id != 0){
         var applyInput = generateApplyEffectOnCharacterInput(casterAttributes, receiverAttributes, casterEffects, receiverEffects, special.effect, derivedEffects, 0, 1);
-        overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput));
+        overrideApplyEffect(applyInput, applyEffectOnCharacter(applyInput, textInstanceGroup));
     }
 }
 
