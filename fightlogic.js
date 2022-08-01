@@ -21,6 +21,7 @@ function findNextActionJS(gameStatus, playerAction, intervalIds) {
     console.log("check the next action is " + playerAction);
     console.log("gameStatus.nextTurnType " + gameStatus.nextTurnType);
     if (gameStatus.nextTurnType == 0 || gameStatus.nextTurnType == 1) {
+        console.log("next turn type is status turn");
         findStatusActionInternal(gameStatus, playerAction, intervalIds);
     }else if(gameStatus.nextTurnType == 2){
         if (playerAction >= 100){
@@ -227,6 +228,7 @@ function overrideCastInputWithInput(source, target) {
 }
 
 function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
+    console.log("enemy turn");
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     updateInnerState(innerState, gameStatus);
 
@@ -273,6 +275,7 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
 }
 
 function findSkipActionInternal(gameStatus, playerAction, intervalIds){
+    console.log("skip action!");
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     updateInnerState(innerState, gameStatus);
         
@@ -915,6 +918,7 @@ function updateInnerState(innerState, gameStatus){
 
 function prepareForNextGameStatus(input, textInstanceGroup) {
     output = findNextActionPointAndRemoveExpiredEffect(generateFindNextActionPointAndRemoveExpiredEffectInput(input.gauge, input.characterInfo, input.deckInfo, input.gameStatus.nextAvailableAbilities, input.derivedEffects, getRandomIntFromNumber(input.gameStatus.nextSeed)), input.intervalIds, textInstanceGroup);
+    console.log(output);
     updateNextTurnGameStatus(input.gameStatus, input.deckInfo, output.actionTarget, output.characterInfo, output.gauge);
     input.gameStatus.casterEffectsNextStart = output.characterInfo.casterEffects;
     input.gameStatus.receiverEffectsNextStart = output.characterInfo.receiverEffects;
@@ -1678,12 +1682,18 @@ function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, t
     resolveSpecialAbility3(input.characterInfo, input.derivedEffects, input.seed, textInstanceGroup);
     //FightLogicBasic.resolveSpecialEffectsForHPBased(input.characterInfo.casterSpecial, input.characterInfo, false, input.derivedEffects);
     //FightLogicBasic.resolveSpecialEffectsForHPBased(input.characterInfo.receiverSpecial, input.characterInfo, true, input.derivedEffects);
+    console.log("old gauge");
+    console.log(JSON.stringify(input.gauge));
+    console.log("effect characater old");
+    console.log(JSON.stringify(input.characterInfo.casterEffects));
     var mainSpeed = input.characterInfo.casterAttributes.speed;
     var enemySpeed = input.characterInfo.receiverAttributes.speed;
     var actionTarget = generateActionTarget(true, -1);
     var minActionTimeLeft = (input.gauge.mainCharacterGauge + 1) / mainSpeed;
+    console.log("time for palyer: " + minActionTimeLeft);
     for(var i = 0; i < input.characterInfo.casterEffects.valid.length; i ++){
         if(input.characterInfo.casterEffects.valid[i] && input.characterInfo.casterEffects.durationType[i] == 0 && input.characterInfo.casterEffects.duration[i] != -10000000){
+            console.log("time for player effect " + i + " " + (input.characterInfo.casterEffects.duration[i] % 10000000 + 1) / mainSpeed);
             if((input.characterInfo.casterEffects.duration[i] % 10000000 + 1) / mainSpeed < minActionTimeLeft){
                 actionTarget.player = true;
                 actionTarget.index = i;
@@ -1701,6 +1711,7 @@ function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, t
         }
     }
     if((input.gauge.enemyGauge + 1) / enemySpeed < minActionTimeLeft){
+        console.log("time for enemy " + (input.gauge.enemyGauge + 1) / enemySpeed);
         actionTarget.player = false;
         actionTarget.index = -1;
         minActionTimeLeft = (input.gauge.enemyGauge + 1) / enemySpeed;
@@ -1721,9 +1732,11 @@ function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, t
     //remove effects when expired.
     for(var i = 0; i < input.characterInfo.casterEffects.valid.length; i ++){
         if(input.characterInfo.casterEffects.valid[i] && input.characterInfo.casterEffects.durationType[i] == 0 && input.characterInfo.casterEffects.duration[i] != -10000000){
-            if((actionTarget.index != i || !actionTarget.player) && input.characterInfo.casterEffects.duration[i] / 10000000 != (input.characterInfo.casterEffects.duration[i] - (minActionTimeLeft * mainSpeed)) / 10000000){
-                input.characterInfo.casterEffects.duration[i] = (input.characterInfo.casterEffects.duration[i] / 10000000) * 10000000;
+            if((actionTarget.index != i || !actionTarget.player) && parseInt(input.characterInfo.casterEffects.duration[i] / 10000000) != parseInt((input.characterInfo.casterEffects.duration[i] - (minActionTimeLeft * mainSpeed)) / 10000000)){
+                console.log("here 1");
+                input.characterInfo.casterEffects.duration[i] = parseInt((input.characterInfo.casterEffects.duration[i] / 10000000) * 10000000);
             }else{
+                console.log("here 2");
                 input.characterInfo.casterEffects.duration[i] -= (minActionTimeLeft * mainSpeed);
             }
             if(input.characterInfo.casterEffects.duration[i] < 0){
@@ -1734,8 +1747,8 @@ function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, t
 
     for(var i = 0; i < input.characterInfo.receiverEffects.valid.length; i ++){
         if(input.characterInfo.receiverEffects.valid[i] && input.characterInfo.receiverEffects.durationType[i] == 0 && input.characterInfo.receiverEffects.duration[i] != -10000000){
-            if((actionTarget.index != i || actionTarget.player) && input.characterInfo.receiverEffects.duration[i] / 10000000 != (input.characterInfo.receiverEffects.duration[i] - (minActionTimeLeft * enemySpeed)) / 10000000){
-                input.characterInfo.receiverEffects.duration[i] = (input.characterInfo.receiverEffects.duration[i] / 10000000) * 10000000;
+            if((actionTarget.index != i || actionTarget.player) && parseInt(input.characterInfo.receiverEffects.duration[i] / 10000000) != parseInt((input.characterInfo.receiverEffects.duration[i] - (minActionTimeLeft * enemySpeed)) / 10000000)){
+                input.characterInfo.receiverEffects.duration[i] = parseInt((input.characterInfo.receiverEffects.duration[i] / 10000000) * 10000000);
             }else{
                 input.characterInfo.receiverEffects.duration[i] -= (minActionTimeLeft * enemySpeed);
             }
@@ -1769,6 +1782,10 @@ function findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, t
     overrideAttribute(input.characterInfo.receiverAttributes, currOut.characterInfo.receiverAttributes);
     overrideDeckInfo(input.deckInfo, currOut.deckInfo);
     input.nextAvailables = currOut.nextAvailables;
+    console.log("effect characater after");
+    console.log(JSON.stringify(input.characterInfo.casterEffects));
+    console.log("new gauge");
+    console.log(JSON.stringify(input.gauge));
     return actionTarget;
 }
 
