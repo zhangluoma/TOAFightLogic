@@ -208,6 +208,40 @@ function overrideCastInputWithInput(source, target) {
     source.seed = target.seed;
 }
 
+
+//TODO
+function playCardAndPutToDeckWithAbilityIndex(arg1, arg2, seed){
+    var abilityIndexToPlay = JSON.parse(JSON.stringify(arg1));
+    var cards = JSON.parse(JSON.stringify(arg2));
+    var cardId = abilityIndexToPlay;
+    var indexToPlay = -1;
+    for(var i = 0; i < cards.handSize; i ++){
+        if(cards.hand[i] == abilityIndexToPlay){
+            indexToPlay = i;
+            break;
+        }
+    }
+    if(indexToPlay < 0){
+        throw "not valid card to play";
+    }
+    updateHand(cards, indexToPlay, cards.hand[cards.handSize - 1]);
+    cards.handSize -= 1;
+    insertToDeckAtRandomPosition(cards, cardId, seed);
+    return cards;
+}
+
+//TODO
+function playCardAndPutToDeck(arg1, arg2, seed){
+    var indexToPlay = JSON.parse(JSON.stringify(arg1));
+    var cards = JSON.parse(JSON.stringify(arg2));
+    var cardId = cards.hand[indexToPlay];
+    //cards.hand[indexToPlay] = cards.hand[cards.handSize - 1];
+    updateHand(cards, indexToPlay, cards.hand[cards.handSize - 1]);
+    cards.handSize -= 1;
+    insertToDeckAtRandomPosition(cards, cardId, seed);
+    return cards;
+}
+
 function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     updateInnerState(innerState, gameStatus);
@@ -224,6 +258,8 @@ function findEnemyActionInternal(gameStatus, playerAction, intervalIds){
         overrideCastInputWithInput(castInput, castAbility(innerState.reversedInfo, castInput, gameStatus.extra.thisTurnTextInstanceGroup));
         if(AbilityOfClass(innerState.reversedInfo.casterAbilityStatus.abilities[abilityToPick], 4)){
             innerState.deckInfo.enemyCards = playCardAndRemove(toPickInHand, innerState.deckInfo.enemyCards);
+        }else if(AbilityOfClass(innerState.reversedInfo.casterAbilityStatus.abilities[abilityToPick], 7)){
+            innerState.deckInfo.enemyCards = playCardAndPutToDeck(toPickInHand, innerState.deckInfo.enemyCards, gameStatus.nextSeed);
         }else{
             innerState.deckInfo.enemyCards = playCard(toPickInHand, innerState.deckInfo.enemyCards);
         }
@@ -298,6 +334,9 @@ function findPlayerActionInternal(gameStatus, playerAction, intervalIds){
     overrideCastInputWithInput(castInput, castAbility(gameStatus.characterInfo, castInput, gameStatus.extra.thisTurnTextInstanceGroup));
     if(AbilityOfClass(innerState.characterInfo.casterAbilityStatus.abilities[playerAction], 4)){
         innerState.deckInfo.playerCards = playCardWithAbilityIndexAndRemove(playerAction, innerState.deckInfo.playerCards);
+    }else if(AbilityOfClass(innerState.characterInfo.casterAbilityStatus.abilities[playerAction], 7)){
+        //reckless
+        innerState.deckInfo.playerCards = playCardAndPutToDeckWithAbilityIndex(playerAction, innerState.deckInfo.playerCards, gameStatus.nextSeed);
     }else{
         innerState.deckInfo.playerCards = playCardWithAbilityIndex(playerAction, innerState.deckInfo.playerCards);
     }
@@ -1473,6 +1512,20 @@ function applyInstantEffectOnCharacter(mutableEffect, arg1, arg2, arg3, textInst
             if(ti != -1){
                 input.effectOnReceiver.specialCounter[3] = getRandomSeededMinMax(1, 6, input.seed + 1521);
             }
+            ti = checkExtraKey(input.effect, 4);
+            if(ti != -1){
+                var dividor = getExtraVal(input.effect, 4);
+                if(dividor != 0){
+                    var originalHP = receiver.hp;
+                    var originalShield = receiver.shield;
+                    receiver.shield = 0;
+                    var hpDelta = - parseInt(receiver.shield / dividor);
+                    receiver.hp += hpDelta;
+                    if(receiver.hp != originalHP || receiver.shield != originalShield){
+                        subGroup.push(generateTextInstance(-1, receiver.hp - originalHP, receiver.shield - originalShield, receiver.isActive));
+                    }
+                }
+            }
         }
         if(input.effect.effectCatalogId == 8){
             ti = (input.effectOnCaster.specialCounter[3] - 4);
@@ -1986,6 +2039,21 @@ function putDiscardToDeck(card){
     }
     card.deckSize += card.discardedSize;
     card.discardedSize = 0;
+}
+
+function insertToDeckAtRandomPosition(card, val, seed){
+    var insertPosition = 0;
+    if(card.deckSize != 0){
+        insertPosition = getRandomSeededMinMax(0, card.deckSize, seed);
+    }
+    if(card.deckSize + 1 > card.deck.length){
+        extendDeckSize(card, 1);
+    }
+    for(var i = card.deckSize - 1; i >= insertPosition; i ++){
+        card.deck[i] = card.deck[i - 1];
+    }
+    card.deck[insertPosition] = val;
+    card.deckSize ++;
 }
 
 function updateDeck(card, index, val) {
