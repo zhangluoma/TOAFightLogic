@@ -1531,7 +1531,7 @@ function applyInstantEffectOnCharacter(mutableEffect, arg1, arg2, arg3, textInst
                     var originalHP = receiver.hp;
                     var originalShield = receiver.shield;
                     receiver.shield = 0;
-                    var hpDelta = - parseInt(receiver.shield / dividor);
+                    var hpDelta = - parseInt(originalShield / dividor);
                     receiver.hp += hpDelta;
                     if(receiver.hp != originalHP || receiver.shield != originalShield){
                         subGroup.push(generateTextInstance(-1, receiver.hp - originalHP, receiver.shield - originalShield, receiver.isActive));
@@ -2028,11 +2028,13 @@ function drawCards(numberToDraw, arg2, seed){
             card = drawCards(amountToDraw, card, seed);
         }
     }
+    console.log("draw card result");
+    console.log(card);
     return card;
 }
 
-function shuffle(vals, seed){
-    for(var index = vals.length - 1; index > 0; index --){
+function shuffle(vals, seed, shuffleSize){
+    for(var index = shuffleSize - 1; index > 0; index --){
         seed = getRandomIntFromNumber(seed);
         var target = getRandomSeededMinMax(0, index, seed);
         var temp = vals[index];
@@ -2069,7 +2071,7 @@ function putDiscardToDeck(card){
 function insertToDeckAtRandomPosition(card, val, seed){
     var insertPosition = 0;
     if(card.deckSize != 0){
-        insertPosition = getRandomSeededMinMax(0, card.deckSize, seed);
+        insertPosition = card.deckSize;//getRandomSeededMinMax(0, card.deckSize, seed);
     }
     if(card.deckSize + 1 > card.deck.length){
         extendDeckSize(card, 1);
