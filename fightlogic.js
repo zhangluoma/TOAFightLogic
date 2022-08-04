@@ -1268,6 +1268,17 @@ function getExtraKeyForModifierEffect(effect, key){
     return -1;
 }
 
+function getMaxExtraStackNumber(effect, effectOnCharacter){
+    var effectDelta = 0;
+    for(var i = 0; i < effectOnCharacter.valid.length; i ++){
+        var extra = getExtraKeyForModifierEffect(effectOnCharacter.effectMap[i], 1000 + effect.effectNameId);
+        if(extra != -1){
+            effectDelta += extra * (effectOnCharacter.extraStack[i] + 1);
+        }
+    }
+    return effect.extraData + effectDelta;
+}
+
 function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
     var input = JSON.parse(JSON.stringify(arg1));
     if(input.effect.duration == 0){
@@ -1292,7 +1303,7 @@ function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
                     input.effectOnReceiver.duration[i] = input.effect.duration;
                 }
                 input.effectOnReceiver.extraStack[i] += ((input.effect.initialExtraStack + 1) * input.executionTime);
-                if(input.effectOnReceiver.extraStack[i] >= input.effect.extraData){
+                if(input.effectOnReceiver.extraStack[i] >= getMaxExtraStackNumber(input.effect, input.effectOnReceiver)){
                     //settle special effect
                     var specialType = getExtraKeyForModifierEffect(input.effect, 10);
                     if(specialType != -1){
@@ -1301,7 +1312,7 @@ function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
                         var newInput = generateApplyEffectOnCharacterInput(input.caster, input.receiver, input.effectOnCaster, input.effectOnReceiver, input.derivedEffects[specialType], input.derivedEffects, input.seed, 1);
                         overrideApplyEffect(newInput, applyEffectOnCharacter(undefined, newInput, textInstanceGroup));
                     }else{
-                        input.effectOnReceiver.extraStack[i] = input.effect.extraData;
+                        input.effectOnReceiver.extraStack[i] = getMaxExtraStackNumber(input.effect, input.effectOnReceiver);
                     }
                 }
                 return generateApplyEffectOnCharacterOutput(input.caster, input.receiver, input.effectOnCaster, input.effectOnReceiver, input.effect, input.seed);
@@ -1320,8 +1331,9 @@ function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
                 }
                 input.effectOnReceiver.ownerId[i] = input.caster.isActive ? 0 : 1;
                 input.effectOnReceiver.extraStack[i] = ((input.effect.initialExtraStack + 1) * input.executionTime) - 1;
-                if(input.effectOnReceiver.extraStack[i] > input.effect.extraData){
-                    input.effectOnReceiver.extraStack[i] = input.effect.extraData;
+                var maxExtraStackNumber = getMaxExtraStackNumber(input.effect, input.effectOnReceiver);
+                if(input.effectOnReceiver.extraStack[i] > maxExtraStackNumber){
+                    input.effectOnReceiver.extraStack[i] = maxExtraStackNumber;
                 }
                 return generateApplyEffectOnCharacterOutput(input.caster, input.receiver, input.effectOnCaster, input.effectOnReceiver, input.effect, input.seed);
             }
@@ -1524,6 +1536,19 @@ function applyInstantEffectOnCharacter(mutableEffect, arg1, arg2, arg3, textInst
                     if(receiver.hp != originalHP || receiver.shield != originalShield){
                         subGroup.push(generateTextInstance(-1, receiver.hp - originalHP, receiver.shield - originalShield, receiver.isActive));
                     }
+                }
+            }
+            ti = checkExtraKey(input.effect, 5);
+            if(ti != -1){
+                var originalCasterShield = caster.shield;
+                var originalReceiverShield = receiver.shield;
+                caster.shield = originalReceiverShield;
+                receiver.shieldDelta = originalCasterShield;
+                if(receiver.shield != originalReceiverShield){
+                    subGroup.push(generateTextInstance(0, 0, receiver.shield - originalReceiverShield, receiver.isActive));
+                }
+                if(caster.shield != originalCasterShield){
+                    subGroup.push(generateTextInstance(0, 0, caster.shield - originalCasterShield, caster.isActive));
                 }
             }
         }
@@ -2049,8 +2074,8 @@ function insertToDeckAtRandomPosition(card, val, seed){
     if(card.deckSize + 1 > card.deck.length){
         extendDeckSize(card, 1);
     }
-    for(var i = card.deckSize - 1; i >= insertPosition; i ++){
-        card.deck[i] = card.deck[i - 1];
+    for(var i = card.deckSize - 1; i >= insertPosition; i --){
+        card.deck[i + 1] = card.deck[i];
     }
     card.deck[insertPosition] = val;
     card.deckSize ++;
