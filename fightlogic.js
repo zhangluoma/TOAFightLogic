@@ -89,6 +89,7 @@ function initStatusExtra(){
 }
 
 function OverrideNextGameStatusWithJS(gameStatus, intervalIds){
+    gameStatus.characterInfo.casterEffects.specialCounter[5] = 100;
     gameStatus = replaceStringWithInteger(gameStatus);
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     gameStatus.extra = initStatusExtra();
@@ -327,7 +328,6 @@ function findPlayerActionInternal(gameStatus, playerAction, intervalIds){
         throw "ability condition not satisfied";
     }
     if(!(innerState.characterInfo.casterAttributes.action.actionPoint - innerState.characterInfo.casterAbilityStatus.abilities[playerAction].actionPoint >= 0)){
-        console.log("the action is " + playerAction);
         throw "not enough action point?????";
     }
     //players turn
@@ -552,7 +552,10 @@ function findSpecialAbilityActionInternal(gameStatus, playerAction, intervalIds)
     updateInnerState(innerState, gameStatus);
 
     var specialIndex = findSpecialIndex(innerState.characterInfo.casterSpecial, playerAction, innerState.characterInfo.casterAttributes.action.actionPoint);
+    syncGaugeWithGauge(innerState.characterInfo, false, innerState.gauge);
     applySpecialEffectV2(innerState.characterInfo.casterSpecial[specialIndex], innerState.characterInfo, gameStatus.derivedEffects, gameStatus.extra.thisTurnTextInstanceGroup);
+    syncGaugeWithCharacterInfo(innerState.characterInfo, false, innerState.gauge);
+    refreshStatus(innerState.gauge, innerState.characterInfo);
     gameStatus.nextAvailableAbilities = getAvailableAbilities(innerState.deckInfo.playerCards, innerState.characterInfo);
     gameStatus.nextTurnType = 2;
     updateGameStatusWithInput(gameStatus, innerState);
@@ -1267,7 +1270,8 @@ function syncGaugeWithCharacterInfo(cinfo, reversed, gauge) {
     }
 }
 
-function findNextActionPointAndRemoveExpiredEffect(input, intervalIds, textInstanceGroup){
+function findNextActionPointAndRemoveExpiredEffect(arg1, intervalIds, textInstanceGroup){
+    var input = JSON.parse(JSON.stringify(arg1));
     var output = {};
     output.actionTarget = findNextActionPointAndRemoveExpiredEffectInternal(input, intervalIds, textInstanceGroup);
     output.gauge = input.gauge;
@@ -2067,8 +2071,6 @@ function drawCards(numberToDraw, arg2, seed){
             card = drawCards(amountToDraw, card, seed);
         }
     }
-    console.log("draw card result");
-    console.log(card);
     return card;
 }
 
@@ -2187,7 +2189,7 @@ function getAvailableAbilities(arg1, arg2){
         }
     }
     for(var index = 0; index < characterInfo.casterSpecial.length; index ++){
-        if(characterInfo.casterSpecial[index].commandId != 0 && characterInfo.casterSpecial[index].cost <= characterInfo.casterAttributes.action.actionPoint &&
+        if(characterInfo.casterSpecial[index].commandId != 0 && characterInfo.casterSpecial[index].cost <= characterInfo.casterAttributes.action.actionPoint && characterInfo.casterSpecial[index].power <= characterInfo.casterEffects.specialCounter[5] &&
             abilityRequirementSatisfiedTriggerAsInput(characterInfo, generateTriggerCondition(characterInfo.casterSpecial[index].triggerType, characterInfo.casterSpecial[index].triggerAttr, characterInfo.casterSpecial[index].triggerOperator, characterInfo.casterSpecial[index].triggerVal))
         ){
             count ++;
