@@ -88,7 +88,7 @@ function initStatusExtra(){
     return {nextTurnTextInstanceGroup : [], thisTurnTextInstanceGroup : []};
 }
 
-function UpdateExtraForInitialStatus(gameStatus, intervalIds){
+function OverrideNextGameStatusWithJS(gameStatus, intervalIds){
     gameStatus = replaceStringWithInteger(gameStatus);
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     gameStatus.extra = initStatusExtra();
@@ -327,7 +327,8 @@ function findPlayerActionInternal(gameStatus, playerAction, intervalIds){
         throw "ability condition not satisfied";
     }
     if(!(innerState.characterInfo.casterAttributes.action.actionPoint - innerState.characterInfo.casterAbilityStatus.abilities[playerAction].actionPoint >= 0)){
-        throw "not enough action point";
+        console.log("the action is " + playerAction);
+        throw "not enough action point?????";
     }
     //players turn
     var castInput = generateCastAbilityInput(innerState.deckInfo, innerState.gauge, false, innerState.characterInfo, playerAction, gameStatus.derivedEffects, gameStatus.nextSeed);
@@ -580,9 +581,43 @@ function updateGameStatusWithInput(gameStatus, innerState) {
 function applySpecialEffectV2(special, characterInfo, derivedEffects, textInstanceGroup) {
     if(special.id != 0){
         var specialOnTarget = special.onTarget;
-        runConditionRelated(generateTriggerCondition(special.triggerType, special.triggerAttr, special.triggerOperator, special.triggerVal), characterInfo);
-        var applyInput = generateApplyEffectOnCharacterInput(characterInfo.casterAttributes, specialOnTarget ? characterInfo.receiverAttributes : characterInfo.casterAttributes, characterInfo.casterEffects, specialOnTarget ? characterInfo.receiverEffects : characterInfo.casterEffects, special.effect, derivedEffects, 0, 1);
-        overrideApplyEffect(applyInput, applyEffectOnCharacter(undefined, applyInput, textInstanceGroup));
+        if(characterInfo.casterEffects.specialCounter[5] < special.power){
+            throw "not enough power";
+        }
+        characterInfo.casterEffects.specialCounter[5] -= special.power;
+        var triggerCondition = generateTriggerCondition(special.triggerType, special.triggerAttr, special.triggerOperator, special.triggerVal);
+        runConditionRelated(triggerCondition, characterInfo);
+        var executionTime = getExecutionTime(triggerCondition, characterInfo);
+        for(var i = 0; i < executionTime; i ++){
+            var applyInput = generateApplyEffectOnCharacterInput(characterInfo.casterAttributes, specialOnTarget ? characterInfo.receiverAttributes : characterInfo.casterAttributes, characterInfo.casterEffects, specialOnTarget ? characterInfo.receiverEffects : characterInfo.casterEffects, special.effect, derivedEffects, 0, 1);
+            overrideApplyEffect(applyInput, applyEffectOnCharacter(undefined, applyInput, textInstanceGroup));
+        }
+    }
+}
+
+function getExecutionTime(triggerCondition, characterInfo){
+    var consumeAllFound = false;
+    var consumeAllCounter = 0;
+    if(triggerCondition.triggerType == 3){
+        for(var i = 0; i < triggerCondition.triggerOperator.length; i ++){
+            if(triggerCondition.triggerOperator[i] == -1){
+                consumeAllFound = true;
+                consumeAllCounter += characterInfo.casterEffects.specialCounter[triggerCondition.triggerAttr[i]];
+            }
+        }
+    }
+    if(triggerCondition.triggerType == 4){
+        for(var i = 0; i < triggerCondition.triggerOperator.length; i ++){
+            if(triggerCondition.triggerOperator[i] == -1){
+                consumeAllFound = true;
+                consumeAllCounter += findStackNumber(characterInfo.casterEffects, triggerCondition.triggerAttr[i]);
+            }
+        }
+    }
+    if(consumeAllFound){
+        return consumeAllCounter;
+    }else{
+        return 1;
     }
 }
 
@@ -594,7 +629,9 @@ function runConditionRelated(triggerCondition, characterInfo){
 function removeCounterFromCaster(triggerCondition, characterInfo) {
     if(triggerCondition.triggerType == 3){
         for(var i = 0; i < triggerCondition.triggerAttr.length; i ++){
-            characterInfo.casterEffects.specialCounter[triggerCondition.triggerAttr[i]] -= triggerCondition.triggerVal[i];
+            if(triggerCondition.triggerOperator[i] == -1 || triggerCondition.triggerOperator[i] == 1){
+                characterInfo.casterEffects.specialCounter[triggerCondition.triggerAttr[i]] -= triggerCondition.triggerVal[i];
+            }
         }
     }
 }
@@ -602,7 +639,9 @@ function removeCounterFromCaster(triggerCondition, characterInfo) {
 function removeEffectStackFromCaster(triggerCondition, characterInfo) {
     if(triggerCondition.triggerType == 4){
         for(var i = 0; i < triggerCondition.triggerAttr.length; i ++){
-            removeStackFromEffect(characterInfo.casterEffects, triggerCondition.triggerAttr[i], triggerCondition.triggerVal[i]);
+            if(triggerCondition.triggerOperator[i] == -1 || triggerCondition.triggerOperator[i] == 1){
+                removeStackFromEffect(characterInfo.casterEffects, triggerCondition.triggerAttr[i], triggerCondition.triggerVal[i]);
+            }
         }
     }
 }
@@ -2164,7 +2203,7 @@ function getAvailableAbilities(arg1, arg2){
         }
     }
     for(var index = 0; index < characterInfo.casterSpecial.length; index ++){
-        if(characterInfo.casterSpecial[index].commandId != 0 && characterInfo.casterSpecial[index].cost <= characterInfo.casterAttributes.action.actionPoint &&
+        if(characterInfo.casterSpecial[index].commandId != 0 && characterInfo.casterSpecial[index].cost <= characterInfo.casterAttributes.action.actionPoint && characterInfo.casterSpecial[index].power <= characterInfo.casterEffects.specialCounter[5] &&
             abilityRequirementSatisfiedTriggerAsInput(characterInfo, generateTriggerCondition(characterInfo.casterSpecial[index].triggerType, characterInfo.casterSpecial[index].triggerAttr, characterInfo.casterSpecial[index].triggerOperator, characterInfo.casterSpecial[index].triggerVal))
         ){
             result[i++] = characterInfo.casterSpecial[index].commandId;
@@ -2228,7 +2267,7 @@ function abilityRequirementSatisfiedTriggerAsInput(arg1, arg2){
         }
     }else if(triggerCondition.triggerType == 3){
         for(var i = 0; i < triggerCondition.triggerAttr.length; i ++){
-            if(!resolve(triggerCondition.triggerOperator[i], characterInfo.casterEffects.specialCounter[uint16(triggerCondition.triggerAttr[i])], triggerCondition.triggerVal[i])){
+            if(!resolve(triggerCondition.triggerOperator[i], characterInfo.casterEffects.specialCounter[triggerCondition.triggerAttr[i]], triggerCondition.triggerVal[i])){
                 return false;
             }
         }
