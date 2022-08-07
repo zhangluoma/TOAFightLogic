@@ -87,9 +87,84 @@ function isFloat(num) {
 function initStatusExtra(){
     return {nextTurnTextInstanceGroup : [], thisTurnTextInstanceGroup : []};
 }
+/*
+int talentType;
+//
+int[] attrs;
+int[] vals;*/
+function OverrideGameStatusWithTalents(gameStatus, playerTalents){
+    gameStatus = replaceStringWithInteger(gameStatus);
+    playerTalents = replaceStringWithInteger(playerTalents);
+    for(var i = 0; i < playerTalents.length; i ++){
+        if(playerTalents[i].talentType == 5){
+            if(playerTalents[i].attrs[0] == 1){
+                //dice explosion change
+                for(var j = 0; j < gameStatus.characterInfo.casterAbilityStatus.abilities.length; j ++){
+                    var ability = gameStatus.characterInfo.casterAbilityStatus.abilities[j];
+                    updateAllDiceExplosionRelatedAbility(ability, playerTalents[i].vals[0]);
+                }
+                for(var j = 0; j < gameStatus.characterInfo.casterSpecial.length; j ++){
+                    var specialAbility = gameStatus.characterInfo.casterSpecial[j];
+                    updateAllDiceExplosionRelatedSpecialAbility(specialAbility, playerTalents[i].vals[0]);
+                }
+            }
+        }else{
+            continue;
+        }
+    }
+    return gameStatus;
+}
+
+function updateAllDiceExplosionRelatedAbility(ability, additionalInstance){
+    for(var i = 0; i < ability.targetEffect.length; i ++){
+        updateAllDiceExplosionRelatedEffect(ability.targetEffect[i], additionalInstance);
+    }
+    for(var i = 0; i < ability.selfEffect.length; i ++){
+        updateAllDiceExplosionRelatedEffect(ability.selfEffect[i], additionalInstance);
+    }
+}
+
+function updateAllDiceExplosionRelatedSpecialAbility(specialAbility, additionalInstance){
+    updateAllDiceExplosionRelatedEffect(specialAbility.effect, additionalInstance);
+}
+
+function updateAllDiceExplosionRelatedEffect(effect, additionalInstance){
+    if(effect.initialExtraStack == -1){
+        var relatedKeyIndex = -1;
+        for(var i =0 ; i < effect.modifierEffect.extraKeys.length; i ++){
+            if(effect.modifierEffect.extraKeys[i] == 11){
+                relatedKeyIndex = i;
+                break;
+            }
+        }
+        if(relatedKeyIndex == -1){
+            effect.modifierEffect.extraKeys.push(11);
+            effect.modifierEffect.extraVals.push(additionalInstance);
+        }else{
+            effect.modifierEffect.extraVals[relatedKeyIndex] += additionalInstance;
+        }
+    }
+    if(effect.instantEffect.instances == -1){
+        var relatedKeyIndex = -1;
+        for(var i =0 ; i < effect.instantEffect.extraKeys.length; i ++){
+            if(effect.instantEffect.extraKeys[i] == 11){
+                relatedKeyIndex = i;
+                break;
+            }
+        }
+        if(relatedKeyIndex == -1){
+            effect.instantEffect.extraKeys.push(11);
+            effect.instantEffect.extraVals.push(additionalInstance);
+        }else{
+            effect.instantEffect.extraVals[relatedKeyIndex] += additionalInstance;
+        }
+    }
+}
 
 function OverrideNextGameStatusWithJS(gameStatus, intervalIds){
+    //ONLY FOR TESTING
     gameStatus.characterInfo.casterEffects.specialCounter[5] = 100;
+
     gameStatus = replaceStringWithInteger(gameStatus);
     var innerState = constructInnerState(gameStatus.deckInfo, gameStatus.gauge, gameStatus.characterInfo, constructCharacterInfo(gameStatus.characterInfo.receiverBaseAttribute, gameStatus.characterInfo.casterBaseAttribute, gameStatus.characterInfo.receiverAttributes, gameStatus.characterInfo.casterAttributes, gameStatus.characterInfo.receiverEffects, gameStatus.characterInfo.casterEffects, gameStatus.characterInfo.receiverAbilityStatus, gameStatus.characterInfo.casterAbilityStatus, gameStatus.characterInfo.receiverEquip, gameStatus.characterInfo.casterEquip, gameStatus.characterInfo.receiverSpecial, gameStatus.characterInfo.casterSpecial));
     gameStatus.extra = initStatusExtra();
@@ -210,7 +285,6 @@ function overrideCastInputWithInput(source, target) {
 }
 
 
-//TODO
 function playCardAndPutToDeckWithAbilityIndex(arg1, arg2, seed){
     var abilityIndexToPlay = JSON.parse(JSON.stringify(arg1));
     var cards = JSON.parse(JSON.stringify(arg2));
@@ -448,11 +522,11 @@ function castAbility(mutableCharacterInfo, arg1, textInstanceGroup){
         if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfTarget){
             applyAbilityEffect(mutableCharacterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.characterInfo.casterAttributes, input.characterInfo.casterAttributes, input.characterInfo.casterEffects, input.characterInfo.casterEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.derivedEffects, input.seed, 1, textInstanceGroup);
             triggerBonusCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.abilityIndex, input.characterInfo);
-            overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.seed));
+            overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].selfEffect, input.characterInfo.casterEffects, input.seed));
         }
         if(input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].enemyTarget){
             applyAbilityEffect(mutableCharacterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.characterInfo.casterAttributes, input.characterInfo.receiverAttributes, input.characterInfo.casterEffects, input.characterInfo.receiverEffects, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.derivedEffects, input.seed, 1, textInstanceGroup);
-            overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.seed));
+            overrideDeckInfo(input.deckInfo, triggerDrawCardAbility(input.deckInfo, input.reversed, input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].targetEffect, input.characterInfo.casterEffects, input.seed));
         }
         var special = getCharacterSpecialAbilityById(input.characterInfo.casterSpecial, 1);
         if(special.id != 0 && input.characterInfo.casterAbilityStatus.abilities[input.abilityIndex].actionPoint == special.attributes[1]){
@@ -467,7 +541,7 @@ function castAbility(mutableCharacterInfo, arg1, textInstanceGroup){
     return input;
 }
 
-function triggerDrawCardAbility(arg1, arg2, arg3, seed) {
+function triggerDrawCardAbility(arg1, arg2, arg3, effectOnCaster, seed) {
     var deckInfo = JSON.parse(JSON.stringify(arg1));
     var reversed = JSON.parse(JSON.stringify(arg2));
     var effects = JSON.parse(JSON.stringify(arg3));
@@ -476,7 +550,7 @@ function triggerDrawCardAbility(arg1, arg2, arg3, seed) {
         var effect = effects[i];
         var index = checkExtraKey(effect, 0);
         if(index != -1){
-            var cardsToDraw = effect.instantEffect.extraVals[index] * effect.instantEffect.instances;
+            var cardsToDraw = effect.instantEffect.extraVals[index] * getEffectInstance(effect, effectOnCaster);
             var target = drawCards(cardsToDraw, cards, seed);
             if(reversed){
                 deckInfo.enemyCards = target;
@@ -1322,7 +1396,42 @@ function getMaxExtraStackNumber(effect, effectOnCharacter){
     return effect.extraData + effectDelta;
 }
 
-function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
+function getEffectInstance(effect, effectOnCaster){
+    var addOnStack = getExtraVal(effect, 11);
+    if(effect.instantEffect.instances >= 0){
+        return effect.instantEffect.instances + addOnStack;
+    }else{
+        return getNumberFromPattern(effect.instantEffect.instances, effectOnCaster) + addOnStack;
+    }
+}
+
+function getStackNumberToApply(effect, effectOnCaster){
+    //TODO
+    var addOnStack = getExtraKeyForModifierEffect(effect, 11);
+    if(addOnStack == -1){
+        addOnStack = 0;
+    }
+    if(effect.initialExtraStack >= 0){
+        return effect.initialExtraStack + 1 + addOnStack;
+    }else{
+        //-1 is for dice explosion wound
+        return getNumberFromPattern(effect.initialExtraStack, effectOnCaster) + addOnStack;
+    }
+}
+
+function getNumberFromPattern(pattern, effectOnCharacter){
+    if(pattern == -1){
+        var val = (effectOnCharacter.specialCounter[3] - 4);
+        if(val < 0){
+            val = -val;
+        }
+        return val;
+    }else{
+        return 0;
+    }
+}
+
+function innerApplyEffect(mutableEffect, arg1, textInstanceGroup){
     var input = JSON.parse(JSON.stringify(arg1));
     if(input.effect.duration == 0){
         var output = applyInstantEffectOnCharacter(mutableEffect, input.caster, input.receiver, generateInstantEffectInput(input.effectOnCaster, input.effectOnReceiver, input.effect, 1, input.seed, false, input.executionTime), textInstanceGroup);
@@ -1345,7 +1454,7 @@ function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
                 }else{
                     input.effectOnReceiver.duration[i] = input.effect.duration;
                 }
-                input.effectOnReceiver.extraStack[i] += ((input.effect.initialExtraStack + 1) * input.executionTime);
+                input.effectOnReceiver.extraStack[i] += (getStackNumberToApply(input.effect, input.effectOnCaster) * input.executionTime);
                 if(input.effectOnReceiver.extraStack[i] >= getMaxExtraStackNumber(input.effect, input.effectOnReceiver)){
                     //settle special effect
                     var specialType = getExtraKeyForModifierEffect(input.effect, 10);
@@ -1373,7 +1482,7 @@ function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
                     input.effectOnReceiver.duration[i] = input.effect.duration;
                 }
                 input.effectOnReceiver.ownerId[i] = input.caster.isActive ? 0 : 1;
-                input.effectOnReceiver.extraStack[i] = ((input.effect.initialExtraStack + 1) * input.executionTime) - 1;
+                input.effectOnReceiver.extraStack[i] = (getStackNumberToApply(input.effect, input.effectOnCaster) * input.executionTime) - 1;
                 var maxExtraStackNumber = getMaxExtraStackNumber(input.effect, input.effectOnReceiver);
                 if(input.effectOnReceiver.extraStack[i] > maxExtraStackNumber){
                     input.effectOnReceiver.extraStack[i] = maxExtraStackNumber;
@@ -1383,6 +1492,14 @@ function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
         }
     }
     return generateApplyEffectOnCharacterOutput(input.caster, input.receiver, input.effectOnCaster, input.effectOnReceiver, input.effect, input.seed);
+}
+
+function applyEffectOnCharacter(mutableEffect, arg1, textInstanceGroup){
+    var res = innerApplyEffect(mutableEffect, arg1, textInstanceGroup);
+    if(res.effect.initialExtraStack == -1 || res.effect.instantEffect.instances == -1){
+        res.effectOnCaster.specialCounter[3] = 100;
+    }
+    return res;
 }
 
 function applyDamage(realDamage, caster, receiver, effectOnCaster, effectOnReceiver, damageType, subGroup){
@@ -1483,13 +1600,17 @@ function resolveReflection(caster, receiver, effectOnReceiver, textInstanceSubGr
     }
 }
 
+function resetLuckyNumber(effectOnCharacter, seed){
+    effectOnCharacter.specialCounter[3] = getRandomSeededMinMax(1, 6, seed + 1521);
+}
+
 function applyInstantEffectOnCharacter(mutableEffect, arg1, arg2, arg3, textInstanceGroup){
     var caster = JSON.parse(JSON.stringify(arg1));
     var receiver = JSON.parse(JSON.stringify(arg2));
     var input = JSON.parse(JSON.stringify(arg3));
     var ti = 0;
     if(shouldBeExcuted(caster, receiver, input.effect.instantEffect)){
-        var totalExecutionTime = input.executionTime * input.effect.instantEffect.instances;
+        var totalExecutionTime = input.executionTime * getEffectInstance(input.effect, input.effectOnCaster);
         var subGroup = [];
         for(var i = 0; i < totalExecutionTime; i ++){
             if(input.effect.instantEffect.shieldDelta != 0 || input.effect.instantEffect.damage != 0 || input.effect.instantEffect.hpRatioDelta!= 0 || input.effect.instantEffect.hpDelta!= 0 || input.effect.instantEffect.baseDamageRatio != 0 || input.effect.instantEffect.actionDelta != 0 || input.effect.instantEffect.progressDelta != 0){
